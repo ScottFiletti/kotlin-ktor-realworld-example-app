@@ -63,11 +63,12 @@ const lines = [
         : `✅ **All ${implemented.length} requests for implemented endpoints pass.**`,
     "",
     `${notImplemented.length} requests target endpoints that are not implemented yet (they answer 501); ` +
-        "they are reported below but do not fail the build.",
+        "they are reported below as ⏸️ and do not fail the build.",
     "",
     "| Request | Implemented | HTTP | Assertions passed |",
     "|---|---|---|---|",
-    ...rows.map((r) => `| ${r.ok ? "✅" : "❌"} ${r.name} | ${r.implemented ? "yes" : "no"} | ${r.code} | ${r.passed}/${r.total} |`),
+    // Unimplemented requests get a neutral icon: they answer 501, and some have no assertions, so ✅/❌ would mislead.
+    ...rows.map((r) => `| ${r.implemented ? (r.ok ? "✅" : "❌") : "⏸️"} ${r.name} | ${r.implemented ? "yes" : "no"} | ${r.code} | ${r.passed}/${r.total} |`),
     "",
 ];
 const summary = lines.join("\n");
