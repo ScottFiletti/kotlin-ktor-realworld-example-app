@@ -4,8 +4,11 @@ import io.realworld.app.domain.Article
 import io.realworld.app.domain.ArticleDTO
 import io.realworld.app.domain.ArticlesDTO
 import io.realworld.app.domain.ProfileDTO
+import io.realworld.app.domain.TagDTO
+import io.realworld.app.web.ErrorResponse
 import io.realworld.app.web.rules.AppRule
 import io.realworld.app.web.util.HttpUtil
+import io.realworld.app.web.util.HttpUtil.Companion.unique
 import org.apache.http.HttpStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,13 +18,13 @@ import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 
-@Ignore
 class ArticleControllerTest {
     @Rule
     @JvmField
     val appRule = AppRule()
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles`() {
         appRule.http.createArticle()
         val http = HttpUtil(appRule.port)
@@ -33,6 +36,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles with auth`() {
         appRule.http.createArticle()
         val response = appRule.http.get<ArticlesDTO>("/api/articles")
@@ -46,6 +50,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles by author`() {
         val author = "user_name_test"
         val response = appRule.http.get<ArticlesDTO>("/api/articles?author=$author")
@@ -61,6 +66,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles by author with auth`() {
         appRule.http.createArticle()
         val author = "user_name_test"
@@ -77,6 +83,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles favorited by username`() {
         val responseCreate = appRule.http.createArticle()
         appRule.http.post<ArticleDTO>("/api/articles/${responseCreate.body.article?.slug}/favorite")
@@ -94,6 +101,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles favorited by username with auth`() {
         val responseCreate = appRule.http.createArticle()
         appRule.http.post<ArticleDTO>("/api/articles/${responseCreate.body.article?.slug}/favorite")
@@ -109,6 +117,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Listing/filtering articles (GET /api/articles) is not implemented yet (501).")
     fun `get all articles by tag`() {
         val responseCreate = appRule.http.createArticle()
         val tag = responseCreate.body.article?.tagList?.first()
@@ -138,6 +147,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("The article feed and following profiles are not implemented yet (501).")
     fun `get all articles of feed`() {
         appRule.http.createArticle()
 
@@ -171,6 +181,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Updating articles is not implemented yet (501).")
     fun `update article by slug`() {
         val responseCreated = appRule.http.createArticle()
         val slug = responseCreated.body.article?.slug
@@ -187,6 +198,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Favoriting articles is not implemented yet (501).")
     fun `favorite article by slug`() {
         val article = Article(
             title = "slug test",
@@ -207,6 +219,7 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Unfavoriting articles is not implemented yet (501).")
     fun `unfavorite article by slug`() {
         val email = "unfavorite_article@valid_email.com"
         val password = "Test"
@@ -231,10 +244,134 @@ class ArticleControllerTest {
     }
 
     @Test
+    @Ignore("Deleting articles is not implemented yet (501).")
     fun `delete article by slug`() {
         val responseCreate = appRule.http.createArticle()
         val response = appRule.http.delete("/api/articles/${responseCreate.body.article?.slug}")
 
         assertEquals(response.status, HttpStatus.SC_OK)
+    }
+
+    // --- Create / get edge cases ---
+
+    @Test
+    fun `create article returns the spec's fields with an ISO date and a profile author`() {
+        val user = appRule.http.createUser()
+        val response = appRule.http.post<String>(
+            "/api/articles", ArticleDTO(Article(title = unique("Spec"), description = "d", body = "b"))
+        )
+        val isoDate = Regex("\"createdAt\":\"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z\"")
+
+        assertEquals(HttpStatus.SC_OK, response.status)
+        listOf("slug", "title", "description", "body", "tagList", "createdAt", "updatedAt", "favorited",
+            "favoritesCount", "author").forEach { assertTrue("missing $it", response.body.contains("\"$it\":")) }
+        assertTrue("createdAt not ISO-8601: ${response.body}", isoDate.containsMatchIn(response.body))
+        assertTrue(response.body.contains("\"username\":\"${user.user?.username}\""))
+        // The author is a public profile: no email or token.
+        assertFalse(response.body.contains("email"))
+        assertFalse(response.body.contains("token"))
+    }
+
+    @Test
+    fun `create article without login returns 401`() {
+        val response = HttpUtil(appRule.port).post<String>(
+            "/api/articles", ArticleDTO(Article(title = "t", description = "d", body = "b"))
+        )
+
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, response.status)
+    }
+
+    @Test
+    fun `create article with missing or blank required fields returns 422`() {
+        appRule.http.createUser()
+        val cases = mapOf(
+            Article(title = "t", description = "d", body = null) to "Body can't be blank.",
+            Article(title = " ", description = "d", body = "b") to "Title can't be blank.",
+            Article(title = "t", description = "", body = "b") to "Description can't be blank.",
+            Article(title = "t", description = "d", body = "b", tagList = listOf("ok", " ")) to "Tags can't be blank.",
+            Article(title = "t".repeat(Article.TITLE_MAX_LENGTH + 1), description = "d", body = "b") to
+                "Title must be at most 255 characters.",
+            Article(title = "t", description = "d", body = "b".repeat(Article.BODY_MAX_LENGTH + 1)) to
+                "Body must be at most 100000 characters."
+        )
+        cases.forEach { (article, message) ->
+            val response = appRule.http.post<ErrorResponse>("/api/articles", ArticleDTO(article))
+
+            assertEquals(message, HttpStatus.SC_UNPROCESSABLE_ENTITY, response.status)
+            assertEquals(listOf(message), response.body.errors["body"])
+        }
+    }
+
+    @Test
+    fun `body exactly at the size limit is accepted`() {
+        appRule.http.createUser()
+        val body = "b".repeat(Article.BODY_MAX_LENGTH)
+        val article = appRule.http.postArticle(title = unique("Long"), body = body)
+
+        assertEquals(body, article.body)
+    }
+
+    @Test
+    fun `slug is derived from the title and made unique`() {
+        appRule.http.createUser()
+        val word = unique("slug")
+        val first = appRule.http.postArticle(title = "Café, crème! $word")
+        val second = appRule.http.postArticle(title = "Café, crème! $word")
+        val symbols = appRule.http.postArticle(title = "!!!")
+
+        assertEquals("cafe-creme-$word", first.slug)
+        assertEquals("cafe-creme-$word-2", second.slug)
+        assertTrue(symbols.slug!!.matches(Regex("article(-\\d+)?")))
+    }
+
+    @Test
+    fun `tags are trimmed, de-duplicated, sorted, and listed by the tags endpoint`() {
+        appRule.http.createUser()
+        val tag = unique("tag")
+        val article = appRule.http.postArticle(title = unique("Tags"), tagList = listOf("zebra", " $tag ", tag))
+        val tags = appRule.http.get<TagDTO>("/api/tags")
+
+        assertEquals(listOf(tag, "zebra"), article.tagList)
+        assertTrue(tags.body.tags.containsAll(listOf(tag, "zebra")))
+        assertEquals(1, tags.body.tags.count { it == tag })
+    }
+
+    @Test
+    fun `get article by slug works without login`() {
+        appRule.http.createUser()
+        val created = appRule.http.postArticle(title = unique("Public"))
+        val response = HttpUtil(appRule.port).get<ArticleDTO>("/api/articles/${created.slug}")
+
+        assertEquals(HttpStatus.SC_OK, response.status)
+        assertEquals(created, response.body.article)
+    }
+
+    @Test
+    fun `get unknown slug returns 404`() {
+        val response = appRule.http.get<ErrorResponse>("/api/articles/${unique("missing")}")
+
+        assertEquals(HttpStatus.SC_NOT_FOUND, response.status)
+        assertEquals(listOf("Article not found."), response.body.errors["body"])
+    }
+
+    // --- Routing ---
+
+    @Test
+    fun `feed requires login and is not mistaken for an article slug`() {
+        val anonymous = HttpUtil(appRule.port).get<String>("/api/articles/feed")
+        appRule.http.createUser()
+        val loggedIn = appRule.http.get<ErrorResponse>("/api/articles/feed")
+
+        assertEquals(HttpStatus.SC_UNAUTHORIZED, anonymous.status)
+        assertEquals(HttpStatus.SC_NOT_IMPLEMENTED, loggedIn.status)
+        assertEquals(listOf("The article feed is not implemented yet."), loggedIn.body.errors["body"])
+    }
+
+    @Test
+    fun `endpoints that are not built yet return 501, not 404`() {
+        appRule.http.createUser()
+        listOf("/api/articles", "/api/articles/some-slug/comments", "/api/profiles/someone").forEach { path ->
+            assertEquals(path, HttpStatus.SC_NOT_IMPLEMENTED, appRule.http.get<String>(path).status)
+        }
     }
 }

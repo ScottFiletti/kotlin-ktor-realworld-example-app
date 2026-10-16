@@ -10,7 +10,7 @@ import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 
-@Ignore
+@Ignore("Profiles and following are not implemented yet (endpoints return 501).")
 class ProfileControllerTest {
     @Rule
     @JvmField

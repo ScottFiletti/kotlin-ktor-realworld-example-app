@@ -17,11 +17,11 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
 
 internal object Users : LongIdTable() {
-    val email: Column<String> = varchar("email", 200).uniqueIndex()
-    val username: Column<String> = varchar("username", 100).uniqueIndex()
+    val email: Column<String> = varchar("email", User.EMAIL_MAX_LENGTH).uniqueIndex()
+    val username: Column<String> = varchar("username", User.USERNAME_MAX_LENGTH).uniqueIndex()
     val password: Column<String> = varchar("password", 150)
-    val bio: Column<String?> = varchar("bio", 1000).nullable()
-    val image: Column<String?> = varchar("image", 255).nullable()
+    val bio: Column<String?> = varchar("bio", User.BIO_MAX_LENGTH).nullable()
+    val image: Column<String?> = varchar("image", User.IMAGE_MAX_LENGTH).nullable()
 
     fun toDomain(row: ResultRow): User {
         return User(

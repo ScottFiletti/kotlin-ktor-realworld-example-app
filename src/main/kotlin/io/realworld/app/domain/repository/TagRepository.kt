@@ -1,5 +1,6 @@
 package io.realworld.app.domain.repository
 
+import io.realworld.app.domain.Article
 import org.jetbrains.exposed.dao.LongIdTable
 import org.jetbrains.exposed.sql.Column
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -7,7 +8,7 @@ import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 
 internal object Tags : LongIdTable() {
-    val name: Column<String> = varchar("name", 100).uniqueIndex()
+    val name: Column<String> = varchar("name", Article.TAG_MAX_LENGTH).uniqueIndex()
 }
 
 class TagRepository {

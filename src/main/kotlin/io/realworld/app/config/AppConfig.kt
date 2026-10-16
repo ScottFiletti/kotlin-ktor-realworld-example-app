@@ -1,5 +1,6 @@
 package io.realworld.app.config
 
+import com.fasterxml.jackson.databind.SerializationFeature
 import io.ktor.application.Application
 import io.ktor.application.install
 import io.ktor.auth.Authentication
@@ -7,10 +8,9 @@ import io.ktor.auth.jwt.jwt
 import io.ktor.features.CallLogging
 import io.ktor.features.ContentNegotiation
 import io.ktor.features.StatusPages
-import io.ktor.http.HttpStatusCode
 import io.ktor.jackson.jackson
-import io.ktor.response.respond
 import io.ktor.routing.Routing
+import io.ktor.routing.route
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.ApplicationEngineFactory
@@ -20,8 +20,8 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.util.KtorExperimentalAPI
 import io.realworld.app.utils.JwtProvider
-import io.realworld.app.web.ErrorResponse
 import io.realworld.app.web.articles
+import io.realworld.app.web.errorMappings
 import io.realworld.app.web.controllers.ArticleController
 import io.realworld.app.web.controllers.CommentController
 import io.realworld.app.web.controllers.ProfileController
@@ -31,25 +31,28 @@ import io.realworld.app.web.profiles
 import io.realworld.app.web.tags
 import io.realworld.app.web.users
 import org.kodein.di.generic.instance
+import java.text.SimpleDateFormat
+import java.util.TimeZone
 
 const val SERVER_PORT = 8080
 
 @KtorExperimentalAPI
 @EngineAPI
-fun setup(isCio: Boolean = true): BaseApplicationEngine {
+fun setup(isCio: Boolean = true, port: Int = SERVER_PORT): BaseApplicationEngine {
     DbConfig.setup("jdbc:h2:mem:DATABASE_TO_UPPER=false;", "sa", "")
-    return server(if (isCio) CIO else Netty)
+    return server(if (isCio) CIO else Netty, port)
 }
 
 @KtorExperimentalAPI
 @EngineAPI
 fun server(
     engine: ApplicationEngineFactory<BaseApplicationEngine,
-        out ApplicationEngine.Configuration>
+        out ApplicationEngine.Configuration>,
+    port: Int = SERVER_PORT
 ): BaseApplicationEngine {
     return embeddedServer(
         engine,
-        port = SERVER_PORT,
+        port = port,
         watchPaths = listOf("mainModule"),
         module = Application::mainModule
     )
@@ -66,6 +69,9 @@ fun Application.mainModule() {
     install(CallLogging)
     install(ContentNegotiation) {
         jackson {
+            // RealWorld spec dates are ISO-8601 strings in UTC, e.g. "2016-02-18T03:22:56.637Z", not epoch numbers.
+            disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").apply { timeZone = TimeZone.getTimeZone("UTC") }
         }
     }
     install(Authentication) {
@@ -80,18 +86,16 @@ fun Application.mainModule() {
         }
     }
     install(StatusPages) {
-        exception(Exception::class.java) {
-            val errorResponse = ErrorResponse(mapOf("error" to listOf("detail", this.toString())))
-            context.respond(
-                HttpStatusCode.InternalServerError, errorResponse
-            )
-        }
+        errorMappings()
     }
 
     install(Routing) {
-        users(userController)
-        profiles(profileController)
-        articles(articleController, commentController)
-        tags(tagController)
+        // RealWorld spec: every endpoint lives under /api (spec-api tests run against APIURL=.../api).
+        route("api") {
+            users(userController)
+            profiles(profileController)
+            articles(articleController, commentController)
+            tags(tagController)
+        }
     }
 }

@@ -1,16 +1,17 @@
 package io.realworld.app.web.rules
 
-import io.ktor.server.engine.ConnectorType
-import io.realworld.app.config.SERVER_PORT
 import io.realworld.app.config.setup
 import io.realworld.app.web.util.HttpUtil
 import org.junit.rules.ExternalResource
+import java.net.ServerSocket
 import java.util.concurrent.TimeUnit
 
 class AppRule : ExternalResource() {
-    private val app = setup()
+    // Each test app gets its own free port. On the fixed port 8080, an app already running locally
+    // (e.g. `gradlew run`) made the test server fail to bind silently, and tests hit that app instead.
+    val port = ServerSocket(0).use { it.localPort }
+    private val app = setup(port = port)
     lateinit var http: HttpUtil
-    val port = app.environment.connectors.find { it.type == ConnectorType.HTTP }?.port ?: SERVER_PORT
 
     override fun before() {
         app.start()
