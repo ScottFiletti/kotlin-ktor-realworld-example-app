@@ -36,3 +36,6 @@ build/
 #System Files
 .DS_Store
 Thumbs.db
+
+# Output of spec-api/run-api-tests.sh as run by CI
+newman-report.json
